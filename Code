@@ -1,0 +1,169 @@
+#1 Identify error and explain how to fix it.
+  #(a) The code is missing a Match function between the genout function 
+  #    and match balance function which would give us the weights for 
+  #    our variables which we would then adjust with the MatchBalance 
+  #    function. This function would be called "mout"
+
+  #(b) The parameters between match and genmatch are not the same. 
+  #    BalanceMatrix is not the same as Weight.Matrix
+  #
+
+  #(c) The "Y" is included in the Match function which would then use 
+  #    the outcome variable in order to balance the weights of our function, 
+  #    thereby biasing our answer.
+
+#2 
+library(Matching)
+# CONSIDER USING THE JUPYTER NOTEBOOK WITH R-SERVER KERNEL (NEVER R-SAGE KERNEL)
+foo <- read.csv("https://course-resources.minerva.kgi.edu/uploaded_files/mke/00086677-3767/peace.csv")
+names(foo)
+# extract relevant columns
+foo <- foo[, c(6:8, 11:16, 99, 50, 114, 49, 63, 136, 109, 126, 48, 160, 142, 10, 108)]
+
+# remove 2 rows with missing data (there are better ways to handle missing data)
+foo <- foo[c(-19, -47), ]
+
+# check that all missing data is gone...
+which(is.na(foo) == TRUE)
+
+# take a peek at the data set (identify the columns)
+head(foo)
+names(foo)
+View(foo)
+nrow(foo)
+
+
+model1<-glm(pbs2s3 ~ wartype + logcost + wardur + factnum + factnum2 + trnsfcap + treaty + develop + exp + decade+ untype4, family = binomial, data = foo)
+model2<-glm(pbs2s3 ~ wartype + logcost + wardur + factnum + factnum2 + trnsfcap + treaty + develop + exp + decade+ untype4 + (wardur*untype4), family = binomial, data = foo)
+model3<-glm(pbs2s3 ~ wartype + logcost + wardur + factnum + factnum2 + trnsfcap + treaty + develop + exp + decade+ untype4 + (logdead*untype4), family = binomial, data = foo)
+
+mwartype <- mean(foo$wartype)
+mlogcost <- mean(foo$logcost)
+mwardur <- mean(foo$wardur)
+mfactnum <- mean(foo$factnum)
+mfactnum2 <- mean(foo$factnum2)
+mtrnsfcap <- mean(foo$trnsfcap)
+mtreaty <- mean(foo$treaty)
+mdevelop <- mean(foo$develop)
+mexp <- mean(foo$exp)
+mdecade <- mean(foo$decade)
+muntype4 <- mean(foo$untype4)
+logdead <- foo$logdead
+
+
+#predicting treatment effect
+model1_effect<- c()
+for (i in 1:315){
+  model1_trt<-data.frame(mwartype,mlogcost,i,mfactnum,mfactnum2,mtrnsfcap,mtreaty,mdevelop,mexp,mdecade,1)
+  model1_crl<-data.frame(mwartype,mlogcost,i,mfactnum,mfactnum2,mtrnsfcap,mtreaty,mdevelop,mexp,mdecade,0)
+  head<-c("wartype","logcost","wardur","factnum","factnum2","trnsfcap","treaty","develop","exp","decade","untype4")
+  names(model1_trt)<-head
+  names(model1_crl)<-head
+  predict_trt<-predict(model1,newdata = model1_trt)
+  predict_crl<-predict(model1,newdata = model1_crl)
+  model1_effect[i]<-inv.logit(predict_trt)-inv.logit(predict_crl)
+}
+
+model2_effect<- c()
+for (i in 1:315){
+  model2_trt<-data.frame(mwartype,mlogcost,i,mfactnum,mfactnum2,mtrnsfcap,mtreaty,mdevelop,mexp,mdecade,1, i*1)
+  model2_crl<-data.frame(mwartype,mlogcost,i,mfactnum,mfactnum2,mtrnsfcap,mtreaty,mdevelop,mexp,mdecade,0, i*0)
+  head<-c("wartype","logcost","wardur","factnum","factnum2","trnsfcap","treaty","develop","exp","decade","untype4","wardur*untype4")
+  names(model2_trt)<-head
+  names(model2_crl)<-head
+  predict_trt<-predict(model2,newdata = model2_trt)
+  predict_crl<-predict(model2,newdata = model2_crl)
+  model2_effect[i]<-inv.logit(predict_trt)-inv.logit(predict_crl)
+}
+
+model3_effect<- c()
+for (i in 1:315){
+  model3_trt<-data.frame(mwartype,mlogcost,i,mfactnum,mfactnum2,mtrnsfcap,mtreaty,mdevelop,mexp,mdecade,1, logdead*1)
+  model3_crl<-data.frame(mwartype,mlogcost,i,mfactnum,mfactnum2,mtrnsfcap,mtreaty,mdevelop,mexp,mdecade,0, logdead*0)
+  head<-c("wartype","logcost","wardur","factnum","factnum2","trnsfcap","treaty","develop","exp","decade","untype4","logdead*untype4")
+  names(model3_trt)<-head
+  names(model3_crl)<-head
+  predict_trt<-predict(model3,newdata = model3_trt)
+  predict_crl<-predict(model3,newdata = model3_crl)
+  model3_effect[i]<-inv.logit(predict_trt)-inv.logit(predict_crl)
+}
+
+plot(x=c(1:315), y=model1_effect,
+     xlim=c(0,315),
+     ylim=c(0,0.8),
+     lty=3,
+     type="l",
+     ylab="Marginal effects of UN peacekeeping operations",
+     xlab="Duration of wars in months")
+lines(c(1:315),model2_effect)
+lines(c(1:315),model3_effect)
+
+
+
+#PROBLEM 3
+     Tr <- rep(0, length(foo$uncint))
+     Tr[which(foo$uncint != 0 & foo$uncint != 1)] <- 1
+     # Treatment is the UN's intervention via peacekeeping operations. 
+     # We subset the data in treatment to only consider the least obtrusive inventions (uncit).
+
+#PROBLEM 4
+     #(a) What is the impact of less obstrusive UN Peacekeeping Intervention on the Duration of War?
+     #(b) It is possible that some of the units (conflicts) could be interacting such that they are 
+     #    in the same/close area or with the same actors, in this case SUTVA would be violated. 
+     #    We can use the caliper argument in order to put a certain distance between the units so that they will never be matched. 
+     #(c)
+     
+foo <- read.csv("https://course-resources.minerva.kgi.edu/uploaded_files/mke/00086677-3767/peace.csv")
+    
+     
+    # LogReg
+     glm1 <- glm(foo$pbs2s3 ~ wartype + logcost + wardur + factnum + factnum2 + trnsfcap + untype4 + treaty + 
+                  develop + exp + decade, data=foo, family="binomial")
+     
+     X  <- glm1$fitted
+     Y  <- foo$pbs2s3
+     Tr  <- foo$untype4
+     
+     
+     summary(glm1)
+     #+8.608 months difference 
+
+     # Propensity score Matching 
+     glm_prop <- glm(untype4 ~ wartype + logcost + wardur + factnum + factnum2 + trnsfcap + treaty + 
+                      develop + exp + decade, data=foo, family="binomial")
+     X <- glm_prop$fitted.values
+     
+     matchout.prop <- Match(Y = foo$pbs2s3, Tr=foo$untype4, X=X)
+
+     mb_out <- MatchBalance(untype4 ~ wartype + logcost + wardur + factnum + factnum2 + trnsfcap + treaty + 
+                              develop + exp + decade, data=foo, match.out = matchout.prop, nboots=1000)
+     
+     summary(mb_out)
+     
+
+     # Genetic Matching 
+     genout <- GenMatch(X = X, Tr = foo$untype4, estimand="ATT", M=1,
+                        pop.size=200, max.generations=25, wait.generations=1, replace = TRUE)
+     matchout.gen <- Match(X = X, Tr = foo$untype4, Y = foo$pbs2s3, Weight.matrix=genout, estimand="ATT", M=1,
+                           pop.size=200, max.generations=25, wait.generations=1, replace = TRUE)
+     mb_out3 <- MatchBalance(untype4 ~ wartype + logcost + wardur + factnum + factnum2 + trnsfcap + treaty + 
+                               develop + exp + decade, data=foo, match.out = matchout.gen, nboots=1000)
+ 
+     
+     
+     # RESULTS OF MATCHING UNITS CONSIDERING THE MARGINAL EFFECTS OF UN PEACEKEEPING OPERATIONS DEPENDENT ON THE DURATION OF WAR
+     #                      tmt effect (bias adj) 	tmt effect (no bias adj)	p-value (from MatchBalance)
+     #  logistic regression                               8.608 months              
+     #  p- score matching	  	    0.002                     <2.22e-16
+     #  gen match                 0.001                     <2.22e-16
+     # *No need to provide bias-adjusted results for logistic regression--only for matching estimates.
+     #**Only provide a treatment effect for matching results if your leximin p-value is above 0.10. Otherwise write in "NA".
+     
+     #DECISION MEMO
+     # Upon measuring the effect of the least obstrustive of UN Peacekeeping operations, I found that it would be 
+     # difficult for the us to discern that these operations made any significant impact on reduce the duration
+     # of conflict in the region. Therefore, I recommend that assess more obtrusive operations and look to see if their 
+     # impact is discernable and significant enough to say if they help reduction the duration of war and that we should
+     # continue their implementation. 
+     
+     
